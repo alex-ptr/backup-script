@@ -1,8 +1,8 @@
 
 
-==============================================================================
+============================================================================
 # SCRIPT DE MAINTENANCE D'UN VPS
-==============================================================================
+============================================================================
 
 Structure attendue des répertoires
 ```
@@ -20,7 +20,6 @@ Structure attendue des répertoires
     ├── app1/
     │   ├── files/        ← copie exacte du répertoire docker compose
     │   ├── volumes/      ← dump tar.gz de chaque volume
-    │   ├── images/       ← images exportées via docker save
     │   └── compose_resolved.yml
     └── app2/
         └── ...
