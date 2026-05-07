@@ -135,7 +135,7 @@ backup_app() {
     local step_errors=0
 
     log_info "┌─ Application : ${app_name}"
-    mkdir -p "${app_backup}/volumes" "${app_backup}/images" "${app_backup}/files"
+    mkdir -p "${app_backup}/volumes" "${app_backup}/files"
 
     # ── 1a. Arrêt propre des conteneurs ──────────────────────────────────────
     log_info "│  Arrêt des conteneurs..."
@@ -191,44 +191,13 @@ backup_app() {
         log_info "│  Aucun volume nommé déclaré."
     fi
 
-    # ── 1d. Sauvegarde des images Docker ─────────────────────────────────────
-    log_info "│  Sauvegarde des images..."
-    local images_list
-    images_list=$(docker compose -f "$compose_file" images --format json 2>/dev/null \
-        | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    seen = set()
-    for item in data:
-        repo = item.get('Repository','').strip()
-        tag  = item.get('Tag','latest').strip()
-        if repo and repo != '<none>' and repo not in seen:
-            seen.add(repo)
-            print(f'{repo}:{tag}')
-except Exception as e:
-    pass
-" 2>/dev/null || true)
-
-    if [ -n "$images_list" ]; then
-        local safe_name; safe_name=$(echo "$app_name" | tr '/' '_')
-        if echo "$images_list" | xargs docker save 2>>"$LOG_FILE" \
-                | gzip > "${app_backup}/images/${safe_name}_images.tar.gz"; then
-            log_ok "│  Images sauvegardées."
-        else
-            log_warn "│  Échec partiel de la sauvegarde des images."
-        fi
-    else
-        log_info "│  Aucune image en cours d'exécution détectée."
-    fi
-
-    # ── 1e. Export de la config réseau résolue ────────────────────────────────
+    # ── 1d. Export de la config réseau résolue ────────────────────────────────
     log_info "│  Export de la configuration réseau résolue..."
     docker compose -f "$compose_file" config \
         > "${app_backup}/compose_resolved.yml" 2>>"$LOG_FILE" || \
         log_warn "│  Impossible d'exporter la config résolue."
 
-    # ── 1f. Redémarrage des conteneurs ────────────────────────────────────────
+    # ── 1e. Redémarrage des conteneurs ────────────────────────────────────────
     log_info "│  Redémarrage des conteneurs..."
     if ! docker compose -f "$compose_file" start 2>>"$LOG_FILE"; then
         log_warn "│  Échec du redémarrage de ${app_name}."
@@ -298,6 +267,11 @@ backup_docker_apps() {
     find "$BACKUPS_DIR" -name "backup_*.tar.gz" -mtime "+${RETENTION_DAYS}" \
         -exec rm -f {} \; 2>>"$LOG_FILE" || true
 
+    # ── Nettoyage des vieux logs ──────────────────────────────────────────────
+    log_info "Nettoyage des logs de plus de ${RETENTION_DAYS} jours..."
+    find "$LOG_DIR" -name "maintenance-*.log" -mtime "+${RETENTION_DAYS}" \
+        -exec rm -f {} \; 2>>"$LOG_FILE" || true
+
     log_ok "Étape 1 terminée. Applications sauvegardées : ${#BACKED_UP[@]}/${app_count}."
 }
 
@@ -342,6 +316,7 @@ sync_to_swift() {
         log_error "Échec de la synchronisation Swift."
         return 1
     fi
+
 }
 
 
